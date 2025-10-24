@@ -5,7 +5,8 @@ using Landis.Core;
 using System.Collections.Generic;
 using Landis.Library.Metadata;
 using System;
-using System.IO;
+using System.Dynamic;
+using Landis.Library.UniversalCohorts;
 
 
 namespace Landis.Extension.Browse
@@ -32,7 +33,6 @@ namespace Landis.Extension.Browse
         private string sitePopMapNamesTemplate;
         private string biomassRemovedMapNameTemplate;
         private IInputParameters parameters;
-        //private bool running;
 
         //Which version of the population model to use? Static population, dynamic population, or BDI
         public static bool DynamicPopulation = false; //SF changed this so that static population can happen -- otherwise
@@ -49,6 +49,7 @@ namespace Landis.Extension.Browse
         public static double PopHarvestMax;
         public static double PopPredationMin;
         public static double PopPredationMax;
+        private bool addCohortData = false;
 
 
         //---------------------------------------------------------------------
@@ -63,18 +64,40 @@ namespace Landis.Extension.Browse
         public static ICore ModelCore { get; private set; }
         public override void AddCohortData()
         {
-            dynamic tempObject = additionalCohortParameters;
+            //dynamic tempObject = additionalCohortParameters;
+            //tempObject.ForageInReach = 0.0f;
+            //tempObject.ProportionBrowse = 0.0f;
+            //tempObject.Forage = 0.0f;
+            //tempObject.BiomassRemoval = 0.0f;
+
+            ExpandoObject addFields = new ExpandoObject();
+            dynamic tempObject = addFields;
             tempObject.ForageInReach = 0.0f;
             tempObject.ProportionBrowse = 0.0f;
             tempObject.Forage = 0.0f;
             tempObject.BiomassRemoval = 0.0f;
+            SiteVars.SetAdditionalFields(addFields);
 
-            Console.Write("   Registering Additional Cohort Data for Biomass Browse"); 
-            //tempObject.BrowseRemoval = 0.0f;
-            //tempObject.LastBrowseProportion = 0.0f;
 
         }
-
+        private void AddCohortDataDisturbance()
+        {
+            foreach (ActiveSite site in ModelCore.Landscape)
+            {
+                var siteCohorts = SiteVars.Cohorts[site];
+                foreach (var speciesCohort in siteCohorts)
+                {
+                    foreach (var cohort in speciesCohort)
+                    {
+                        dynamic tempObject = cohort.Data.AdditionalParameters;
+                        tempObject.ForageInReach = 0.0f;
+                        tempObject.ProportionBrowse = 0.0f;
+                        tempObject.Forage = 0.0f;
+                        tempObject.BiomassRemoval = 0.0f;
+                    }
+                }
+            }
+        }
         //---------------------------------------------------------------------
 
         public override void LoadParameters(string dataFile, ICore mCore)
@@ -137,6 +160,15 @@ namespace Landis.Extension.Browse
         {
             //running = true;
             ModelCore.UI.WriteLine("Processing landscape for ungulate browse events ...");
+
+            if (ModelCore.CurrentTime > 0)
+            {
+                if (addCohortData == false)
+                {
+                    AddCohortDataDisturbance();
+                    addCohortData = true;
+                }
+            }
 
             //This does everything -- calculates forage and disturbs sites
             Event browseEvent = Event.Initiate(parameters);
